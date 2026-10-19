@@ -18,3 +18,9 @@
 ## Templates
 
 * [SFINAE and std::enable_if](https://eli.thegreenplace.net/2014/sfinae-and-enable_if/)
+
+## Concurrency
+
+### lock-free
+
+* [Optimizing a ring buffer for throughput](https://rigtorp.se/ringbuffer/) 
