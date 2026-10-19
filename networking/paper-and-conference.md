@@ -71,3 +71,8 @@ selected links of papers and sessions about networking perf.
 
 * [QUIC and HTTP/3 CPU Performance](https://conferences.sigcomm.org/sigcomm/2020/files/slides/epiq/0%20QUIC%20and%20HTTP_3%20CPU%20Performance.pdf)
 
+## eBPF
+
+### 2026
+
+* [Netkit: Specializing Linux Packet Delivery for Container Networks](https://dl.acm.org/doi/pdf/10.1145/3837779.3838164)
