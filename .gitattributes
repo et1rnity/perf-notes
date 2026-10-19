@@ -1,0 +1,20 @@
+# Format C/C++ contents before they enter the index.
+# Enable locally with: python3 scripts/git_clang_format.py --install
+*.c    filter=clang-format
+*.C    filter=clang-format
+*.cc   filter=clang-format
+*.cp   filter=clang-format
+*.cpp  filter=clang-format
+*.CPP  filter=clang-format
+*.cxx  filter=clang-format
+*.c++  filter=clang-format
+*.h    filter=clang-format
+*.H    filter=clang-format
+*.hh   filter=clang-format
+*.hpp  filter=clang-format
+*.hxx  filter=clang-format
+*.h++  filter=clang-format
+*.inc  filter=clang-format
+*.inl  filter=clang-format
+*.ipp  filter=clang-format
+*.tpp  filter=clang-format
