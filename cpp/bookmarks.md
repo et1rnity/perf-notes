@@ -24,3 +24,4 @@
 ### lock-free
 
 * [Optimizing a ring buffer for throughput](https://rigtorp.se/ringbuffer/) 
+* [Beyond Locks: A Vyukov-Based SPMC Lock-Free Queue in C++20/23](https://medium.com/@serhatg2490/beyond-locks-a-vyukov-based-spmc-lock-free-queue-in-c-20-23-133d7fcec518)
