@@ -1,11 +1,13 @@
 // Redirect only unfragmented IPv4 UDP/9000; ARP and other traffic use the
 // stack.
-#include <bpf/bpf_endian.h>
-#include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
+
+// bpf_helpers.h requires Linux types such as __u32 and __u64 first.
+#include <bpf/bpf_endian.h>
+#include <bpf/bpf_helpers.h>
 
 struct {
   __uint(type, BPF_MAP_TYPE_XSKMAP);
