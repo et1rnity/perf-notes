@@ -7,7 +7,7 @@
 namespace ringbuffer {
 
 template <Payload T, std::size_t Capacity>
-class NaiveRingBuffer {
+class Naive {
   static_assert(std::has_single_bit(Capacity),
                 "Capcity must be a nonzero power of two");
 
