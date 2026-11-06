@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <span>
 namespace rb {
@@ -32,7 +33,7 @@ class Classic {
     }  // busy-wait
     std::memcpy(&ring_[wp % ring_.size()], &msg,
                 sizeof(Message) - sizeof(std::atomic_uint32_t));
-    ring_[wp % ring_.size()].sequence = wp;
+    ring_[wp % ring_.size()].sequence.store(wp, std::memory_order_relaxed);
 
     wp += 1;
     shared_write_pointer_.store(wp, std::memory_order_release);
@@ -46,7 +47,11 @@ class Classic {
       return 0;
     }
     auto mp = &ring_[rp % ring_.size()];
-    assert(static_cast<uint32_t>(mp->sequence) == rp);
+    if (static_cast<uint32_t>(mp->sequence.load(std::memory_order_relaxed)) !=
+        rp) [[unlikely]] {
+      std::cerr << "Ring buffer sequence mismatch\n";
+      std::abort();
+    }
     rp += 1;
     shared_read_pointer_.store(rp, std::memory_order_release);
     receiver_read_pointer_ = rp;
