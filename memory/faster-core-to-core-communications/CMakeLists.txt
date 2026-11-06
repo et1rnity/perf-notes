@@ -5,6 +5,13 @@ target_sources(benchmark PRIVATE
   new_ring_buffer.cpp
   classic_ring_buffer.cpp
 )
+
+include(CheckIPOSupported)
+check_ipo_supported(LANGUAGES CXX)
+set_property(TARGET benchmark PROPERTY
+  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+)
+
 add_executable(c2c c2c.cpp)
 
 if(PERF_EVENT)
