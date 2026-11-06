@@ -20,6 +20,7 @@
 #include "base/tsc.h"
 #include "memory/faster-core-to-core-communications/classic_ring_buffer.h"
 #include "memory/faster-core-to-core-communications/message.h"
+#include "memory/faster-core-to-core-communications/new_ring_buffer.h"
 #if defined(PERF_EVENT)
 #include "perfcpp/counter_definition.hpp"
 #include "perfcpp/event_counter.hpp"
@@ -73,6 +74,9 @@ template <typename T>
 ScopedEventCounter(T&, std::uint16_t) -> ScopedEventCounter<T>;
 #endif
 
+constexpr std::string_view kClassicRingType = "classic";
+constexpr std::string_view kNewRingType = "new";
+
 template <typename Ring>
 concept MessageQueue = std::constructible_from<Ring, std::size_t> &&
                        requires(Ring& r, Message& m) {
@@ -109,7 +113,7 @@ void Benchmark(std::size_t num_senders,
   for (std::size_t i = 0; i < num_senders; ++i) {
     sender_ctxs.push_back({
         sender_cpus[i],
-        std::make_unique<rb::Classic>(ring_size),
+        std::make_unique<Q>(ring_size),
     });
   }
   std::latch senders_ready{static_cast<std::ptrdiff_t>(num_senders)};
@@ -265,10 +269,13 @@ int main(int argc, char* argv[]) {
     }
 
     std::string ring_type(argv[1]);
-    if (ring_type != "classic") {
-      throw std::invalid_argument(
-          "Error: only `classic` ring is supported yet");
+    if (ring_type != kClassicRingType && ring_type != kNewRingType) {
+      throw std::invalid_argument(std::string("Error: supported ring type: ") +
+                                  kClassicRingType.data() + ", " +
+                                  kNewRingType.data());
     }
+    std::cout << "Benchmarking ring type: " << ring_type.data() << "\n";
+
     auto num_senders = static_cast<std::size_t>(std::atoi(argv[2]));
     std::istringstream sender_cpus_stream(argv[3]);
     std::vector<int> sender_cpus;
@@ -288,7 +295,11 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Bind receiver to CPU " << receiver_cpu << "\n";
 
-    Benchmark<rb::Classic>(num_senders, sender_cpus, receiver_cpu);
+    if (ring_type == kClassicRingType) {
+      Benchmark<rb::Classic>(num_senders, sender_cpus, receiver_cpu);
+    } else if (ring_type == kNewRingType) {
+      Benchmark<rb::New>(num_senders, sender_cpus, receiver_cpu);
+    }
 
   } catch (std::exception& e) {
     std::cerr << std::string("Error! ") + e.what() << "\n";
