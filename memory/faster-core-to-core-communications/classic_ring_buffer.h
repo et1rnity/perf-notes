@@ -32,7 +32,7 @@ class Classic {
            ring_.size() - 1) {
     }  // busy-wait
     std::memcpy(&ring_[wp % ring_.size()], &msg,
-                sizeof(Message) - sizeof(std::atomic_uint32_t));
+                sizeof(Message) - sizeof(decltype(msg.sequence)));
     ring_[wp % ring_.size()].sequence.store(wp, std::memory_order_relaxed);
 
     wp += 1;
