@@ -1,0 +1,73 @@
+# Build directories
+build/
+cmake-build-*/
+
+# CMake-generated files (including accidental in-source builds)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+CTestCustom.cmake
+install_manifest.txt
+Testing/
+_deps/
+compile_commands.json
+CMakeUserPresets.json
+
+# Ninja-generated files
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+
+# Object files, dependency files, and precompiled headers
+*.o
+*.obj
+*.d
+*.gch
+*.pch
+*.ipch
+
+# Static and shared libraries
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.dll.a
+*.exp
+
+# Executables and debug symbols
+a.out
+*.out
+*.exe
+*.pdb
+*.ilk
+*.dSYM/
+*.dwo
+*.dwp
+
+# Coverage, profiling, and runtime dumps
+*.gcno
+*.gcda
+*.gcov
+*.profraw
+*.profdata
+gmon.out
+perf.data
+perf.data.old
+core
+core.[0-9]*
+
+# Local compiler/editor caches and temporary files
+.cache/
+.clangd/
+.ccls-cache/
+*.swp
+*.swo
+*~
+
+# Python helpers
+__pycache__/
+*.pyc
