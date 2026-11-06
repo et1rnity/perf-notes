@@ -1,0 +1,3 @@
+[submodule "third_party/perf-cpp"]
+	path = third_party/perf-cpp
+	url = https://github.com/jmuehlig/perf-cpp.git
