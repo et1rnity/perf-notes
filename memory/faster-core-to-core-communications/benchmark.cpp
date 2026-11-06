@@ -120,7 +120,9 @@ int main(int argc, char* argv[]) {
   try {
     if (argc < 5) {
       throw std::invalid_argument(
-          "Usage: ./benchmark <ring_type> <num_senders> <sender_cpus> "
+          "Usage: "
+          "benchmark <ring_type> <num_senders> "
+          "<comma separated sender_cpus list> "
           "<receiver_cpu>");
     }
 
