@@ -21,9 +21,10 @@
 #include "memory/faster-core-to-core-communications/classic_ring_buffer.h"
 #include "memory/faster-core-to-core-communications/message.h"
 #if defined(PERF_EVENT)
+#include "perfcpp/counter_definition.hpp"
 #include "perfcpp/event_counter.hpp"
 
-constexpr std::string_view kCacheMissesEvent = "cache-misses";
+constexpr std::string_view kCacheMissesEvent = "l1d.replacement";
 
 template <typename T>
 struct ScopedEventCounter;
@@ -114,12 +115,17 @@ void Benchmark(std::size_t num_senders,
   std::latch senders_ready{static_cast<std::ptrdiff_t>(num_senders)};
   std::vector<std::exception_ptr> startup_errors(num_senders);
 #if defined(PERF_EVENT)
+  auto counter_def = perf::CounterDefinition{};
+  counter_def.add(kCacheMissesEvent.data(), 0x151);
+  std::cout << "[PERF_EVENT] recording event: " << kCacheMissesEvent.data()
+            << "\n";
+
   // Record perf events
-  auto multi_event_counter =
-      perf::MultiThreadEventCounter{static_cast<uint16_t>(num_senders)};
-  multi_event_counter.add({kCacheMissesEvent.data()});
-  auto receiver_event_counter = perf::EventCounter{};
-  receiver_event_counter.add({kCacheMissesEvent.data()});
+  auto multi_event_counter = perf::MultiThreadEventCounter{
+      counter_def, static_cast<uint16_t>(num_senders)};
+  multi_event_counter.add(kCacheMissesEvent.data());
+  auto receiver_event_counter = perf::EventCounter{counter_def};
+  receiver_event_counter.add(kCacheMissesEvent.data());
   receiver_event_counter.open();
 #endif
   std::size_t recevied_msg_count = 0;
@@ -215,8 +221,15 @@ void Benchmark(std::size_t num_senders,
     }
   }
 
-  auto receiver_cache_misses_count =
-      receiver_event_counter.result().get(kCacheMissesEvent).value_or(0);
+  auto value = receiver_event_counter.result().get(kCacheMissesEvent);
+
+  if (!value) {
+    throw std::runtime_error(
+        std::string("Requested event is missing from results: ") +
+        kCacheMissesEvent.data());
+  };
+  auto receiver_cache_misses_count = value.value();
+
   std::cout << "[Receiver] total cache-misses: " << receiver_cache_misses_count
             << "\n";
 
