@@ -10,7 +10,6 @@
 #include <iostream>
 #include <latch>
 #include <memory>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -21,6 +20,7 @@
 #include "base/tsc.h"
 #include "memory/faster-core-to-core-communications/classic_ring_buffer.h"
 #include "memory/faster-core-to-core-communications/message.h"
+#if defined(PERF_EVENT)
 #include "perfcpp/event_counter.hpp"
 
 constexpr std::string_view kCacheMissesEvent = "cache-misses";
@@ -70,6 +70,7 @@ struct ScopedEventCounter<T> {
 
 template <typename T>
 ScopedEventCounter(T&, std::uint16_t) -> ScopedEventCounter<T>;
+#endif
 
 template <typename Ring>
 concept MessageQueue = std::constructible_from<Ring, std::size_t> &&
@@ -108,6 +109,7 @@ void Benchmark(std::size_t num_senders,
   }
   std::latch senders_ready{static_cast<std::ptrdiff_t>(num_senders)};
   std::vector<std::exception_ptr> startup_errors(num_senders);
+#if defined(PERF_EVENT)
   // Record perf events
   auto multi_event_counter =
       perf::MultiThreadEventCounter{static_cast<uint16_t>(num_senders)};
@@ -115,7 +117,7 @@ void Benchmark(std::size_t num_senders,
   auto receiver_event_counter = perf::EventCounter{};
   receiver_event_counter.add({kCacheMissesEvent.data()});
   receiver_event_counter.open();
-
+#endif
   std::size_t recevied_msg_count = 0;
   const std::size_t total_msg_count = num_senders * message_count;
 
@@ -131,10 +133,14 @@ void Benchmark(std::size_t num_senders,
 
   try {
     for (std::size_t i = 0; i < num_senders; ++i) {
-      senders[i] =
-          std::thread{[ready = ready_result, i, cpu = sender_ctxs[i].cpu,
-                       ring = sender_ctxs[i].ring.get(), &senders_ready,
-                       &startup_errors, &multi_event_counter] {
+      senders[i] = std::thread{
+          [ready = ready_result, i, cpu = sender_ctxs[i].cpu,
+           ring = sender_ctxs[i].ring.get(), &senders_ready, &startup_errors
+#if defined(PERF_EVENT)
+           ,
+           &multi_event_counter
+#endif
+      ] {
             try {
               cpu::SetAffinity(cpu);
             } catch (...) {
@@ -148,8 +154,10 @@ void Benchmark(std::size_t num_senders,
             };
 
             Message msg{};
+#if defined(PERF_EVENT)
             ScopedEventCounter sender_guard{multi_event_counter,
                                             static_cast<uint16_t>(i)};
+#endif
             for (std::size_t i = 0; i < message_count; ++i) {
               ring->Send(msg);
             }
@@ -171,7 +179,9 @@ void Benchmark(std::size_t num_senders,
 
   auto tsc_start = tsc::ReadOrdered();
   {
+#if defined(PERF_EVENT)
     ScopedEventCounter receiver_guard{receiver_event_counter};
+#endif
     ready.set_value(true);
     while (recevied_msg_count != total_msg_count) {
       for (auto& ctx : sender_ctxs) {
@@ -185,6 +195,12 @@ void Benchmark(std::size_t num_senders,
 
   join_senders();
 
+  std::cout << "TSC ticks per message: "
+            << static_cast<double>(tsc_stop - tsc_start) /
+                   static_cast<double>(total_msg_count)
+            << "\n";
+
+#if defined(PERF_EVENT)
   double sender_cache_misses_count = 0;
   for (auto result = multi_event_counter.result();
        const auto [name, value] : result) {
@@ -196,15 +212,6 @@ void Benchmark(std::size_t num_senders,
   auto receiver_cache_misses_count =
       receiver_event_counter.result().get(kCacheMissesEvent).value_or(0);
 
-  std::cout << "TSC ticks per message: "
-            << static_cast<double>(tsc_stop - tsc_start) /
-                   static_cast<double>(total_msg_count)
-            << "\n";
-  std::cout << "Time per message: "
-            << (static_cast<double>(tsc_stop - tsc_start) * ns_per_tsc_tick) /
-                   static_cast<double>(total_msg_count)
-            << " ns \n";
-
   std::cout << "Receiver cache-misses per message: "
             << receiver_cache_misses_count /
                    static_cast<double>(total_msg_count)
@@ -213,6 +220,12 @@ void Benchmark(std::size_t num_senders,
   std::cout << "Sender cache-missed per message: "
             << sender_cache_misses_count / static_cast<double>(total_msg_count)
             << "\n";
+#endif
+
+  std::cout << "Time per message: "
+            << (static_cast<double>(tsc_stop - tsc_start) * ns_per_tsc_tick) /
+                   static_cast<double>(total_msg_count)
+            << " ns \n";
 }
 
 int main(int argc, char* argv[]) {

@@ -3,7 +3,10 @@ find_package(Threads REQUIRED)
 add_executable(benchmark benchmark.cpp)
 add_executable(c2c c2c.cpp)
 
-target_link_libraries(benchmark PRIVATE perf-cpp)
+if(PERF_EVENT)
+  target_compile_definitions(benchmark PRIVATE PERF_EVENT)
+  target_link_libraries(benchmark PRIVATE perf-cpp)
+endif()
 
 foreach(target IN ITEMS benchmark c2c)
   target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}")
