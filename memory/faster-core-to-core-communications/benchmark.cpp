@@ -90,12 +90,16 @@ void Benchmark(std::size_t num_senders,
                const std::vector<int>& sender_cpus,
                int receiver_cpu) {
   cpu::SetAffinity(receiver_cpu);
+  std::cout << "Calibrating TSC frequency...\n";
   const auto tsc_freq = tsc::CalibrateFrequency();
   const auto ns_per_tsc_tick = 1e9 / tsc_freq;
   std::cout << "TSC frequency: " << tsc_freq / 1e9 << " Ghz\n";
 
   constexpr std::size_t ring_size = 128;
   constexpr std::size_t message_count = 1e8;
+  std::cout << "Experiment with ring of " << ring_size
+            << " slots, and each ring transfers " << message_count
+            << " messages\n";
 
   std::vector<SenderContext<Q>> sender_ctxs;
   std::promise<bool> ready;
@@ -195,6 +199,8 @@ void Benchmark(std::size_t num_senders,
 
   join_senders();
 
+  std::cout << "Tested with " << total_msg_count << " messages.\n";
+
   std::cout << "TSC ticks per message: "
             << static_cast<double>(tsc_stop - tsc_start) /
                    static_cast<double>(total_msg_count)
@@ -211,21 +217,28 @@ void Benchmark(std::size_t num_senders,
 
   auto receiver_cache_misses_count =
       receiver_event_counter.result().get(kCacheMissesEvent).value_or(0);
+  std::cout << "[Receiver] total cache-misses: " << receiver_cache_misses_count
+            << "\n";
 
-  std::cout << "Receiver cache-misses per message: "
+  std::cout << "[Receiver] cache-misses per message: "
             << receiver_cache_misses_count /
                    static_cast<double>(total_msg_count)
             << "\n";
 
-  std::cout << "Sender cache-missed per message: "
+  std::cout << "[Sender] total cache-misses: " << sender_cache_misses_count
+            << "\n";
+
+  std::cout << "[Sender] cache-misses per message: "
             << sender_cache_misses_count / static_cast<double>(total_msg_count)
             << "\n";
 #endif
 
-  std::cout << "Time per message: "
-            << (static_cast<double>(tsc_stop - tsc_start) * ns_per_tsc_tick) /
-                   static_cast<double>(total_msg_count)
-            << " ns \n";
+  std::cout << "Messages per second (x10^6): "
+            << (static_cast<double>(total_msg_count) /
+                ((static_cast<double>(tsc_stop - tsc_start) * ns_per_tsc_tick) /
+                 1e9)) /
+                   1e6
+            << "\n";
 }
 
 int main(int argc, char* argv[]) {
