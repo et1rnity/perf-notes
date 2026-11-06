@@ -1,8 +1,0 @@
-# Relative include paths are anchored by compile_flags.txt in this directory.
-CompileFlags:
-  CompilationDatabase: Ancestors
----
-If:
-  PathMatch: .*\.(h|hh|hpp|hxx|cc|cpp|cxx)
-CompileFlags:
-  Add: [-xc++, -std=c++20]
