@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <fstream>
 #include <future>
 #include <iostream>
 #include <latch>
@@ -73,6 +74,63 @@ struct ScopedEventCounter<T> {
 template <typename T>
 ScopedEventCounter(T&, std::uint16_t) -> ScopedEventCounter<T>;
 #endif
+
+namespace platform {
+namespace fs = std::filesystem;
+
+std::string ReadValue(const fs::path& path) {
+  std::ifstream in(path);
+  std::string value;
+  return (in >> value) ? value : "N/A";
+}
+
+std::string ReadField(const fs::path& path, std::string_view key) {
+  std::ifstream in(path);
+  for (std::string line; std::getline(in, line);) {
+    const auto colon = line.find(':');
+    if (colon == std::string::npos)
+      continue;
+    auto name = std::string_view(line).substr(0, colon);
+    const auto end = name.find_last_not_of(" \t");
+    if (end == std::string_view::npos || name.substr(0, end + 1) != key)
+      continue;
+    const auto first = line.find_first_not_of(" \t", colon + 1);
+    return first == std::string::npos ? "N/A" : line.substr(first);
+  }
+  return "N/A";
+}
+
+void PrintCpu(std::string_view role, int cpu) {
+  const auto base =
+      fs::path("/sys/devices/system/cpu") / ("cpu" + std::to_string(cpu));
+  const auto topology = base / "topology";
+  std::string node = "N/A";
+  std::error_code ec;
+  for (fs::directory_iterator it(base, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    const auto name = it->path().filename().string();
+    if (name.starts_with("node")) {
+      node = name.substr(4);
+      break;
+    }
+  }
+  std::cout << role << ": cpu=" << cpu
+            << " socket=" << ReadValue(topology / "physical_package_id")
+            << " core=" << ReadValue(topology / "core_id") << " numa=" << node
+            << " siblings=" << ReadValue(topology / "thread_siblings_list")
+            << '\n';
+}
+
+void PrintPlatformInfo(const std::vector<int>& sender_cpus, int receiver_cpu) {
+  std::cout << "CPU model: " << ReadField("/proc/cpuinfo", "model name") << '\n'
+            << "Memory (kernel-visible): "
+            << ReadField("/proc/meminfo", "MemTotal") << '\n';
+  PrintCpu("Receiver", receiver_cpu);
+  for (std::size_t i = 0; i < sender_cpus.size(); ++i) {
+    PrintCpu("Sender[" + std::to_string(i) + "]", sender_cpus[i]);
+  }
+}
+}  // namespace platform
 
 constexpr std::string_view kClassicRingType = "classic";
 constexpr std::string_view kNewRingType = "new";
@@ -294,6 +352,8 @@ int main(int argc, char* argv[]) {
       std::cout << sender_cpus[i] << ((i == (num_senders - 1)) ? "]\n" : ", ");
     }
     std::cout << "Bind receiver to CPU " << receiver_cpu << "\n";
+
+    platform::PrintPlatformInfo(sender_cpus, receiver_cpu);
 
     if (ring_type == kClassicRingType) {
       Benchmark<rb::Classic>(num_senders, sender_cpus, receiver_cpu);
