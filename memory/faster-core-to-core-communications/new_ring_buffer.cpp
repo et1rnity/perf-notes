@@ -12,7 +12,7 @@ void New::Send(Message& msg) {
   }
   std::memcpy(&ring_[wp % ring_.size()], &msg,
               sizeof(Message) - sizeof(decltype(msg.sequence)));
-  ring_[wp % ring_.size()].sequence.store(wp, std::memory_order_relaxed);
+  ring_[wp % ring_.size()].sequence.store(wp, std::memory_order_release);
 
   sender_write_pointer_ = wp + 1;
 }
@@ -20,7 +20,7 @@ void New::Send(Message& msg) {
 int New::Poll() {
   auto rp = receiver_read_pointer_;
   auto mp = &ring_[rp % ring_.size()];
-  if (mp->sequence != rp) {
+  if (mp->sequence.load(std::memory_order_acquire) != rp) {
     return 0;
   }
   rp += 1;
