@@ -19,9 +19,8 @@
 #include <vector>
 #include "base/cpu.h"
 #include "base/tsc.h"
-#include "memory/faster-core-to-core-communications/classic_ring_buffer.h"
 #include "memory/faster-core-to-core-communications/message.h"
-#include "memory/faster-core-to-core-communications/new_ring_buffer.h"
+#include "memory/faster-core-to-core-communications/ring_buffer.h"
 #if defined(PERF_EVENT)
 #include "perfcpp/counter_definition.hpp"
 #include "perfcpp/event_counter.hpp"
@@ -133,7 +132,9 @@ void PrintPlatformInfo(const std::vector<int>& sender_cpus, int receiver_cpu) {
 }  // namespace platform
 
 constexpr std::string_view kClassicRingType = "classic";
-constexpr std::string_view kNewRingType = "new";
+constexpr std::string_view kPiggbackRingType = "piggyback";
+constexpr std::string_view kBatchReleaseType = "batch";
+constexpr std::string_view kFinalRingType = "final";
 
 template <typename Ring>
 concept MessageQueue = std::constructible_from<Ring, std::size_t> &&
@@ -326,13 +327,17 @@ int main(int argc, char* argv[]) {
           "<receiver_cpu>");
     }
 
-    std::string ring_type(argv[1]);
-    if (ring_type != kClassicRingType && ring_type != kNewRingType) {
-      throw std::invalid_argument(std::string("Error: supported ring type: ") +
-                                  kClassicRingType.data() + ", " +
-                                  kNewRingType.data());
+    std::string ring_name(argv[1]);
+    auto r = rb::ToRingType(ring_name);
+    if (!r.has_value()) {
+      throw std::invalid_argument(
+          std::string("Error: supported ring type: ") +
+          kClassicRingType.data() + ", " + kPiggbackRingType.data() + ", " +
+          kBatchReleaseType.data() + ", " + kFinalRingType.data());
     }
-    std::cout << "Benchmarking ring type: " << ring_type.data() << "\n";
+    auto ring_type = r.value();
+
+    std::cout << "Benchmarking ring type: " << ring_name << "\n";
 
     auto num_senders = static_cast<std::size_t>(std::atoi(argv[2]));
     std::istringstream sender_cpus_stream(argv[3]);
@@ -355,14 +360,28 @@ int main(int argc, char* argv[]) {
 
     platform::PrintPlatformInfo(sender_cpus, receiver_cpu);
 
-    if (ring_type == kClassicRingType) {
-      Benchmark<rb::Classic>(num_senders, sender_cpus, receiver_cpu);
-    } else if (ring_type == kNewRingType) {
-      Benchmark<rb::New>(num_senders, sender_cpus, receiver_cpu);
+    using ClassicRing = rb::Ring<rb::RingType::Classic>;
+    using PiggybackRing = rb::Ring<rb::RingType::PiggybackSharedWritePointer>;
+    using BatchReleaseRing = rb::Ring<rb::RingType::BatchSlotRelease>;
+    using FinalRing = rb::Ring<rb::RingType::Final>;
+
+    switch (ring_type) {
+      case rb::RingType::Classic:
+        Benchmark<ClassicRing>(num_senders, sender_cpus, receiver_cpu);
+        break;
+      case rb::RingType::PiggybackSharedWritePointer:
+        Benchmark<PiggybackRing>(num_senders, sender_cpus, receiver_cpu);
+        break;
+      case rb::RingType::BatchSlotRelease:
+        Benchmark<BatchReleaseRing>(num_senders, sender_cpus, receiver_cpu);
+        break;
+      case rb::RingType::Final:
+        Benchmark<FinalRing>(num_senders, sender_cpus, receiver_cpu);
+        break;
     }
 
   } catch (std::exception& e) {
-    std::cerr << std::string("Error! ") + e.what() << "\n";
+    std::cerr << e.what() << "\n";
     return 1;
   }
 }

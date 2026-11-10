@@ -1,10 +1,6 @@
 find_package(Threads REQUIRED)
 
 add_executable(benchmark benchmark.cpp)
-target_sources(benchmark PRIVATE
-  new_ring_buffer.cpp
-  classic_ring_buffer.cpp
-)
 
 include(CheckIPOSupported)
 check_ipo_supported(LANGUAGES CXX)
