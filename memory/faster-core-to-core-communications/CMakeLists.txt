@@ -19,3 +19,23 @@ foreach(target IN ITEMS benchmark c2c)
   target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}")
   target_link_libraries(${target} PRIVATE Threads::Threads)
 endforeach()
+
+if(BUILD_TESTING)
+  add_executable(ring_buffer_tests ring_buffer_tests.cpp)
+  target_include_directories(ring_buffer_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+  target_link_libraries(ring_buffer_tests PRIVATE Threads::Threads)
+
+  add_test(NAME ring_buffer.parse COMMAND ring_buffer_tests parse)
+  foreach(strategy IN ITEMS classic piggyback batch final)
+    foreach(scenario IN ITEMS empty single wraparound backpressure concurrent)
+      add_test(NAME ring_buffer.${strategy}.${scenario}
+        COMMAND ring_buffer_tests ${strategy} ${scenario})
+      set_tests_properties(ring_buffer.${strategy}.${scenario} PROPERTIES
+        TIMEOUT 20
+        LABELS "unit;ring_buffer")
+    endforeach()
+  endforeach()
+  set_tests_properties(ring_buffer.parse PROPERTIES
+    TIMEOUT 20
+    LABELS "unit;ring_buffer")
+endif()
