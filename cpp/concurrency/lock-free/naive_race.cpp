@@ -3,13 +3,13 @@
 #include <iostream>
 #include <latch>
 #include <thread>
-#include "ringbuffer/naive_ring_buffer.h"
+#include "ringbuffer/naive.h"
 
 int main() {
   std::cerr << "INTENTIONALLY UNDEFINED BUHAVIOR: unsynchronized ring-buffer.\n"
                "Run the tsan preset to diagnose races; normal output proves "
                "nothing.\n";
-  ringbuffer::NaiveRingBuffer<uint64_t, 64> queue;
+  ringbuffer::Naive<uint64_t, 64> queue;
   std::latch start(2);
   std::uint64_t pushed = 0;
   std::uint64_t poped = 0;

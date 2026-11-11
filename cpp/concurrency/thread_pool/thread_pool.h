@@ -6,6 +6,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
