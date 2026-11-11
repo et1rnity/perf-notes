@@ -64,6 +64,7 @@ core.[0-9]*
 .cache/
 .clangd/
 .ccls-cache/
+*.log
 *.swp
 *.swo
 *~

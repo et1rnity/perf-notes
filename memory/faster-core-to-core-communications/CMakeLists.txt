@@ -2,6 +2,17 @@ find_package(Threads REQUIRED)
 
 add_executable(benchmark benchmark.cpp)
 
+set(BATCH_SIZE_OFFSET "1" CACHE STRING
+  "Batch release offset: 1..7 for a 128-slot ring")
+
+if(NOT "${BATCH_SIZE_OFFSET}" MATCHES "^[1-7]$")
+  message(FATAL_ERROR "BATCH_SIZE_OFFSET must be an integer from 1 to 7")
+endif()
+
+target_compile_definitions(benchmark PRIVATE
+  BATCH_SIZE_OFFSET=${BATCH_SIZE_OFFSET}
+)
+
 include(CheckIPOSupported)
 check_ipo_supported(LANGUAGES CXX)
 set_property(TARGET benchmark PROPERTY

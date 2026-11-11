@@ -39,7 +39,7 @@ inline std::optional<RingType> ToRingType(std::string_view type) {
   return std::nullopt;
 }
 
-template <RingType T>
+template <RingType T, std::size_t ReleaseBatchOffset = 1>
 class alignas(cpu::destructive_interference_size) Ring {
  public:
   explicit Ring(std::size_t size) {
@@ -93,7 +93,7 @@ class alignas(cpu::destructive_interference_size) Ring {
     }
     rp += 1;
     if constexpr (kBatching) {
-      if ((rp & ((ring_.size() - 1) >> 1)) == 0) {
+      if ((rp & ((ring_.size() - 1) >> ReleaseBatchOffset)) == 0) {
         shared_read_pointer_.store(rp, std::memory_order_release);
       }
     } else {

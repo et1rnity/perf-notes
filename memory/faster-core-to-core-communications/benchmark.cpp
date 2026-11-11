@@ -362,7 +362,8 @@ int main(int argc, char* argv[]) {
 
     using ClassicRing = rb::Ring<rb::RingType::Classic>;
     using PiggybackRing = rb::Ring<rb::RingType::PiggybackSharedWritePointer>;
-    using BatchReleaseRing = rb::Ring<rb::RingType::BatchSlotRelease>;
+    using BatchReleaseRing =
+        rb::Ring<rb::RingType::BatchSlotRelease, BATCH_SIZE_OFFSET>;
     using FinalRing = rb::Ring<rb::RingType::Final>;
 
     switch (ring_type) {
