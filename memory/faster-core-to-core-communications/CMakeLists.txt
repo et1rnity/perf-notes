@@ -19,12 +19,13 @@ set_property(TARGET benchmark PROPERTY
   INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
 )
 
-add_executable(c2c c2c.cpp)
-
 if(PERF_EVENT)
   target_compile_definitions(benchmark PRIVATE PERF_EVENT)
   target_link_libraries(benchmark PRIVATE perf-cpp)
 endif()
+target_link_libraries(benchmark PRIVATE nlohmann_json::nlohmann_json)
+
+add_executable(c2c c2c.cpp)
 
 foreach(target IN ITEMS benchmark c2c)
   target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}")

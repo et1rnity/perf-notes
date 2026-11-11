@@ -2,6 +2,34 @@
 
 A modern C++ reproduction of the expriment described in Intel's [Faster Core-to-Core Communications](https://www.intel.com/content/www/us/en/developer/articles/technical/fast-core-to-core-communications.html).
 
+## JSON output
+
+From the `perf-notes` root, initialize the submodules and build the benchmark:
+
+```sh
+git submodule update --init --recursive
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DPERF_EVENT=ON
+cmake --build build/release --target benchmark
+./build/release/memory/faster-core-to-core-communications/benchmark classic 1 1 0
+```
+
+Each successful run writes one JSON object to stdout, preserving field insertion
+order. It includes the strategy, CPU model and topology, kernel-visible memory
+in KiB, message counts, TSC timing, and throughput in messages per second. Batch
+runs also include `batch_size_offset` and `batch_size`. With `PERF_EVENT=ON`, the
+`perf` object records the event name and sender/receiver counts; with it disabled,
+the object is omitted. JSON serialization happens after the timed section.
+
+To run each strategy ten times and collect the 40 results into a JSON array,
+install `jq` and run:
+
+```sh
+bash memory/faster-core-to-core-communications/benchmark.sh
+```
+
+The script writes `result.json` in the current directory. Adjust the sender and
+receiver CPU arguments in the script for the test machine.
+
 ## Unit tests
 
 From the `perf-notes` root:

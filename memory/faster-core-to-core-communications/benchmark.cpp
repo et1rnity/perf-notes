@@ -6,16 +6,19 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <latch>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 #include "base/cpu.h"
 #include "base/tsc.h"
@@ -74,6 +77,8 @@ template <typename T>
 ScopedEventCounter(T&, std::uint16_t) -> ScopedEventCounter<T>;
 #endif
 
+using Json = nlohmann::ordered_json;
+
 namespace platform {
 namespace fs = std::filesystem;
 
@@ -99,35 +104,89 @@ std::string ReadField(const fs::path& path, std::string_view key) {
   return "N/A";
 }
 
-void PrintCpu(std::string_view role, int cpu) {
+Json ReadInteger(const std::string& value) {
+  std::istringstream input(value);
+  std::int64_t number;
+  return (input >> number) ? Json(number) : Json(nullptr);
+}
+
+Json ReadCpuList(const fs::path& path) {
+  std::ifstream input(path);
+  std::string value;
+  if (!(input >> value)) {
+    return nullptr;
+  }
+
+  auto cpus = Json::array();
+  std::istringstream list(value);
+  for (std::string group; std::getline(list, group, ',');) {
+    std::istringstream range(group);
+    int first;
+    if (!(range >> first) || first < 0) {
+      return nullptr;
+    }
+    int last = first;
+    if (range.peek() == '-') {
+      range.get();
+      if (!(range >> last) || last < first) {
+        return nullptr;
+      }
+    }
+    range >> std::ws;
+    if (!range.eof()) {
+      return nullptr;
+    }
+    for (int id = first;; ++id) {
+      cpus.push_back(id);
+      if (id == last) {
+        break;
+      }
+    }
+  }
+  return cpus;
+}
+
+Json ReadCpuInfo(int cpu) {
   const auto base =
       fs::path("/sys/devices/system/cpu") / ("cpu" + std::to_string(cpu));
   const auto topology = base / "topology";
-  std::string node = "N/A";
+  Json node = nullptr;
   std::error_code ec;
   for (fs::directory_iterator it(base, ec), end; !ec && it != end;
        it.increment(ec)) {
     const auto name = it->path().filename().string();
     if (name.starts_with("node")) {
-      node = name.substr(4);
+      node = ReadInteger(name.substr(4));
       break;
     }
   }
-  std::cout << role << ": cpu=" << cpu
-            << " socket=" << ReadValue(topology / "physical_package_id")
-            << " core=" << ReadValue(topology / "core_id") << " numa=" << node
-            << " siblings=" << ReadValue(topology / "thread_siblings_list")
-            << '\n';
+  return {
+      {"socket", ReadInteger(ReadValue(topology / "physical_package_id"))},
+      {"core", ReadInteger(ReadValue(topology / "core_id"))},
+      {"numa", node},
+      {"siblings", ReadCpuList(topology / "thread_siblings_list")},
+  };
 }
 
-void PrintPlatformInfo(const std::vector<int>& sender_cpus, int receiver_cpu) {
-  std::cout << "CPU model: " << ReadField("/proc/cpuinfo", "model name") << '\n'
-            << "Memory (kernel-visible): "
-            << ReadField("/proc/meminfo", "MemTotal") << '\n';
-  PrintCpu("Receiver", receiver_cpu);
-  for (std::size_t i = 0; i < sender_cpus.size(); ++i) {
-    PrintCpu("Sender[" + std::to_string(i) + "]", sender_cpus[i]);
+void CollectPlatformInfo(const std::vector<int>& sender_cpus,
+                         int receiver_cpu,
+                         Json& json_output) {
+  auto senders = Json::object();
+  for (int cpu : sender_cpus) {
+    senders["cpu" + std::to_string(cpu)] = ReadCpuInfo(cpu);
   }
+  json_output["test_platform"] = {
+      {"cpu",
+       {
+           {"model", ReadField("/proc/cpuinfo", "model name")},
+           {"receiver",
+            {{"cpu" + std::to_string(receiver_cpu),
+              ReadCpuInfo(receiver_cpu)}}},
+           {"senders", std::move(senders)},
+       }},
+      {"memory",
+       {{"total_kib", ReadInteger(ReadField("/proc/meminfo", "MemTotal"))}}},
+  };
 }
 }  // namespace platform
 
@@ -152,18 +211,14 @@ struct SenderContext {
 template <MessageQueue Q>
 void Benchmark(std::size_t num_senders,
                const std::vector<int>& sender_cpus,
-               int receiver_cpu) {
+               int receiver_cpu,
+               Json& json_output) {
   cpu::SetAffinity(receiver_cpu);
-  std::cout << "Calibrating TSC frequency...\n";
   const auto tsc_freq = tsc::CalibrateFrequency();
   const auto ns_per_tsc_tick = 1e9 / tsc_freq;
-  std::cout << "TSC frequency: " << tsc_freq / 1e9 << " Ghz\n";
 
   constexpr std::size_t ring_size = 128;
   constexpr std::size_t message_count = 1e8;
-  std::cout << "Experiment with ring of " << ring_size
-            << " slots, and each ring transfers " << message_count
-            << " messages\n";
 
   std::vector<SenderContext<Q>> sender_ctxs;
   std::promise<bool> ready;
@@ -180,8 +235,6 @@ void Benchmark(std::size_t num_senders,
 #if defined(PERF_EVENT)
   auto counter_def = perf::CounterDefinition{};
   counter_def.add(kCacheMissesEvent.data(), 0x151);
-  std::cout << "[PERF_EVENT] recording event: " << kCacheMissesEvent.data()
-            << "\n";
 
   // Record perf events
   auto multi_event_counter = perf::MultiThreadEventCounter{
@@ -268,12 +321,20 @@ void Benchmark(std::size_t num_senders,
 
   join_senders();
 
-  std::cout << "Tested with " << total_msg_count << " messages.\n";
-
-  std::cout << "TSC ticks per message: "
-            << static_cast<double>(tsc_stop - tsc_start) /
-                   static_cast<double>(total_msg_count)
-            << "\n";
+  json_output["ring_size"] = ring_size;
+  if (json_output["ring_type"] == kBatchReleaseType) {
+    json_output["batch_size_offset"] = BATCH_SIZE_OFFSET;
+    json_output["batch_size"] = ring_size >> BATCH_SIZE_OFFSET;
+  }
+  json_output["messages_per_sender"] = message_count;
+  json_output["total_messages"] = total_msg_count;
+  json_output["tsc_frequency_ghz"] = tsc_freq / 1e9;
+  json_output["tsc_ticks_per_message"] =
+      static_cast<double>(tsc_stop - tsc_start) /
+      static_cast<double>(total_msg_count);
+  json_output["messages_per_second"] =
+      (static_cast<double>(total_msg_count) /
+       ((static_cast<double>(tsc_stop - tsc_start) * ns_per_tsc_tick) / 1e9));
 
 #if defined(PERF_EVENT)
   double sender_cache_misses_count = 0;
@@ -293,28 +354,14 @@ void Benchmark(std::size_t num_senders,
   };
   auto receiver_cache_misses_count = value.value();
 
-  std::cout << "[Receiver] total cache-misses: " << receiver_cache_misses_count
-            << "\n";
-
-  std::cout << "[Receiver] cache-misses per message: "
-            << receiver_cache_misses_count /
-                   static_cast<double>(total_msg_count)
-            << "\n";
-
-  std::cout << "[Sender] total cache-misses: " << sender_cache_misses_count
-            << "\n";
-
-  std::cout << "[Sender] cache-misses per message: "
-            << sender_cache_misses_count / static_cast<double>(total_msg_count)
-            << "\n";
+  json_output["perf"] = {
+      {"event", kCacheMissesEvent},
+      {"receiver_total", receiver_cache_misses_count},
+      {"sender_total", sender_cache_misses_count},
+      {"receiver_per_message", receiver_cache_misses_count / total_msg_count},
+      {"sender_per_message", sender_cache_misses_count / total_msg_count},
+  };
 #endif
-
-  std::cout << "Messages per second (x10^6): "
-            << (static_cast<double>(total_msg_count) /
-                ((static_cast<double>(tsc_stop - tsc_start) * ns_per_tsc_tick) /
-                 1e9)) /
-                   1e6
-            << "\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -337,8 +384,6 @@ int main(int argc, char* argv[]) {
     }
     auto ring_type = r.value();
 
-    std::cout << "Benchmarking ring type: " << ring_name << "\n";
-
     auto num_senders = static_cast<std::size_t>(std::atoi(argv[2]));
     std::istringstream sender_cpus_stream(argv[3]);
     std::vector<int> sender_cpus;
@@ -352,34 +397,38 @@ int main(int argc, char* argv[]) {
     }
     auto receiver_cpu = std::atoi(argv[4]);
 
-    std::cout << "Bind " << num_senders << " senders to CPU [";
-    for (std::size_t i = 0; i < num_senders; ++i) {
-      std::cout << sender_cpus[i] << ((i == (num_senders - 1)) ? "]\n" : ", ");
-    }
-    std::cout << "Bind receiver to CPU " << receiver_cpu << "\n";
-
-    platform::PrintPlatformInfo(sender_cpus, receiver_cpu);
-
     using ClassicRing = rb::Ring<rb::RingType::Classic>;
     using PiggybackRing = rb::Ring<rb::RingType::PiggybackSharedWritePointer>;
     using BatchReleaseRing =
         rb::Ring<rb::RingType::BatchSlotRelease, BATCH_SIZE_OFFSET>;
     using FinalRing = rb::Ring<rb::RingType::Final>;
 
+    Json json_output = {
+        {"ring_type", ring_name},
+    };
+
+    platform::CollectPlatformInfo(sender_cpus, receiver_cpu, json_output);
+
     switch (ring_type) {
       case rb::RingType::Classic:
-        Benchmark<ClassicRing>(num_senders, sender_cpus, receiver_cpu);
+        Benchmark<ClassicRing>(num_senders, sender_cpus, receiver_cpu,
+                               json_output);
         break;
       case rb::RingType::PiggybackSharedWritePointer:
-        Benchmark<PiggybackRing>(num_senders, sender_cpus, receiver_cpu);
+        Benchmark<PiggybackRing>(num_senders, sender_cpus, receiver_cpu,
+                                 json_output);
         break;
       case rb::RingType::BatchSlotRelease:
-        Benchmark<BatchReleaseRing>(num_senders, sender_cpus, receiver_cpu);
+        Benchmark<BatchReleaseRing>(num_senders, sender_cpus, receiver_cpu,
+                                    json_output);
         break;
       case rb::RingType::Final:
-        Benchmark<FinalRing>(num_senders, sender_cpus, receiver_cpu);
+        Benchmark<FinalRing>(num_senders, sender_cpus, receiver_cpu,
+                             json_output);
         break;
     }
+
+    std::cout << json_output.dump() << "\n";
 
   } catch (std::exception& e) {
     std::cerr << e.what() << "\n";

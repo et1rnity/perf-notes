@@ -49,10 +49,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(JSON_Install OFF CACHE INTERNAL "")
 
 include(CTest)
 
 if(PERF_EVENT)
   add_subdirectory(third_party)
 endif()
+add_subdirectory(third_party/nlohmann_json)
 add_subdirectory(memory/faster-core-to-core-communications)
