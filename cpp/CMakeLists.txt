@@ -9,6 +9,7 @@ function(add_cpp_example source)
   string(REGEX REPLACE "[^A-Za-z0-9_]" "_" target "cpp_${target}")
   add_executable(${target} "${source}" ${ARGN})
   target_compile_features(${target} PRIVATE cxx_std_20)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}")
   if(source MATCHES "^concurrency/")
     target_link_libraries(${target} PRIVATE Threads::Threads)
   endif()
@@ -24,6 +25,7 @@ foreach(source IN ITEMS
     language/crtp.cpp
     language/exception.cpp
     language/move_semantics.cpp
+    language/thread_local.cpp
     language/virtual_layout.cpp
     language/volatile.cpp
     type-erasure/any_sink.cpp
@@ -51,6 +53,8 @@ foreach(source IN ITEMS
     concurrency/thread_pool/example.cpp)
   add_cpp_example("${source}")
 endforeach()
+
+target_link_libraries(cpp_language_thread_local PRIVATE nlohmann_json::nlohmann_json)
 
 # This example contains static_asserts and intentionally has no main().
 add_library(cpp_template_meta_programming_type_list OBJECT

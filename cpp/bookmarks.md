@@ -6,6 +6,11 @@
 
 * [C++ move semantics from scratch](https://cbarrete.com/move-from-scratch.html)
 
+### thread_local
+
+- [0+0 > 0: C++ thread-local storage performance](https://yosefk.com/blog/cxx-thread-local-storage-performance.html)
+- [Speeding up C++ functions with a thread_local cache](https://lemire.me/blog/2025/10/19/speeding-up-c-functions-with-a-thread_local-cache/)
+
 ### Rvalue
 
 * [A Brief Introduction to Rvalue References](https://www.artima.com/articles/a-brief-introduction-to-rvalue-references)
