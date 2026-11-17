@@ -1,5 +1,6 @@
 // Measuring cache-to-cache transfer latency
-// clang++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I/path/to/perf-notes c2c.cpp -o c2c
+// clang++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I/path/to/perf-notes c2c.cpp
+// -o c2c
 
 #include <emmintrin.h>
 #include <pthread.h>

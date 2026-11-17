@@ -170,7 +170,8 @@ static void parse_obj(void) {
   memcpy(text_runtime_base, obj.base + text_hdr->sh_offset, text_hdr->sh_size);
 
   // make the `.text` copy readonly and executable
-  if (mprotect(text_runtime_base, page_align(text_hdr->sh_size), PROT_READ | PROT_EXEC)) {
+  if (mprotect(text_runtime_base, page_align(text_hdr->sh_size),
+               PROT_READ | PROT_EXEC)) {
     perror("Failed to make .text executable");
     exit(errno);
   }
