@@ -25,56 +25,11 @@
 #include "memory/faster-core-to-core-communications/message.h"
 #include "memory/faster-core-to-core-communications/ring_buffer.h"
 #if defined(PERF_EVENT)
+#include "base/perf.h"
 #include "perfcpp/counter_definition.hpp"
 #include "perfcpp/event_counter.hpp"
 
 constexpr std::string_view kCacheMissesEvent = "l1d.replacement";
-
-template <typename T>
-struct ScopedEventCounter;
-
-template <typename T>
-  requires requires(T& t) {
-    { t.start() } -> std::same_as<void>;
-    { t.stop() } -> std::same_as<void>;
-  }
-struct ScopedEventCounter<T> {
- public:
-  explicit ScopedEventCounter(T& event_counter) : event_counter(event_counter) {
-    event_counter.start();
-  }
-
-  ~ScopedEventCounter() { event_counter.stop(); }
-
- private:
-  T& event_counter;
-};
-
-// Class template argument deduction
-template <typename T>
-ScopedEventCounter(T&) -> ScopedEventCounter<T>;
-
-template <typename T>
-  requires requires(T& t, std::uint16_t i) {
-    { t.start(i) } -> std::same_as<void>;
-    { t.stop(i) } -> std::same_as<void>;
-  }
-struct ScopedEventCounter<T> {
- public:
-  explicit ScopedEventCounter(T& event_counter, uint16_t thread_id)
-      : event_counter(event_counter), thread_id(thread_id) {
-    event_counter.start(thread_id);
-  }
-
-  ~ScopedEventCounter() { event_counter.stop(thread_id); }
-
- private:
-  T& event_counter;
-  uint16_t thread_id;
-};
-
-template <typename T>
-ScopedEventCounter(T&, std::uint16_t) -> ScopedEventCounter<T>;
 #endif
 
 using Json = nlohmann::ordered_json;
@@ -281,8 +236,8 @@ void Benchmark(std::size_t num_senders,
 
             Message msg{};
 #if defined(PERF_EVENT)
-            ScopedEventCounter sender_guard{multi_event_counter,
-                                            static_cast<uint16_t>(i)};
+            base::perf::ScopedEventCounter sender_guard{
+                multi_event_counter, static_cast<uint16_t>(i)};
 #endif
             for (std::size_t i = 0; i < message_count; ++i) {
               ring->Send(msg);
@@ -306,7 +261,7 @@ void Benchmark(std::size_t num_senders,
   auto tsc_start = tsc::ReadOrdered();
   {
 #if defined(PERF_EVENT)
-    ScopedEventCounter receiver_guard{receiver_event_counter};
+    base::perf::ScopedEventCounter receiver_guard{receiver_event_counter};
 #endif
     ready.set_value(true);
     while (recevied_msg_count != total_msg_count) {
