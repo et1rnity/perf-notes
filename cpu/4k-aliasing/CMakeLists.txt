@@ -1,0 +1,8 @@
+add_executable(4k-aliasing main.cpp)
+target_compile_features(4k-aliasing PRIVATE cxx_std_20)
+target_include_directories(4k-aliasing PRIVATE "${PROJECT_SOURCE_DIR}")
+if(PERF_EVENT)
+  target_compile_definitions(4k-aliasing PRIVATE PERF_EVENT)
+  target_link_libraries(4k-aliasing PRIVATE perf-cpp)
+endif()
+target_link_libraries(4k-aliasing PRIVATE nlohmann_json::nlohmann_json)
