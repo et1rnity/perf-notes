@@ -25,6 +25,7 @@ foreach(source IN ITEMS
     language/crtp.cpp
     language/exception.cpp
     language/move_semantics.cpp
+    language/rtti.cpp
     language/thread_local.cpp
     language/virtual_layout.cpp
     language/volatile.cpp
